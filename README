@@ -1,0 +1,266 @@
+emacs-pilot version 1.4 (bbdb-pilot.el version 2.4, diary-pilot.el
+version 2.4, memo-pilot.el version 1.2).
+
+This is the README file for my Emacs-Pilot synchronization suite
+<http://turing.ubishops.ca/home/bruda/emacs-pilot/>.  Synchronization
+is implemented for the BBDB database, the diary, and memos.  All the
+tools are bi-directional, but the bidirectionality is not perfect
+(given that the transfer implemented by `pilot-link' is almost never
+bijective).
+
+The only requirement (besides Emacs or XEmacs and a Palm OS device)
+for this package is the pilot-link package <http://www.pilot-link.org/> 
+which does the actual transfer between your machine and the pilot.
+
+Special thanks go to Jim Kalb, the most active and patient beta tester
+I have ever had.
+
+Installation and Setup
+======================
+
+Note: the scripts pilot-wait and pilot-wait-end are useful only for
+pure udev systems.  If your /dev/pilot is persistent then you may want
+to set `pilot-wait-command' to the empty string (effectively
+eliminating the use of pilot-wait) and you *must* set
+`pilot-end-command' to the empty string (effectively eliminating the
+use of pilot-wait-end).  Read the documentation of the two mentioned
+variables for details.
+
+You need to know (a) a directory where Emacs knows to look for Elisp
+files (for the Elisp source) and (b) a directory in the search path
+(for two small shell scripts).  Once you established these edit the
+Makefile provided and change the first two macros accordingly.  Change
+the third macro to the name of the emacs executable you use.  Then
+make sure you have write permissions to the specified directories and
+type make at the shell prompt.
+
+If you do not want to use the makefile then you need to
+o  copy the scripts pilot-wait and pilot-wait-end somewhere in the
+   search path; these are needed only for pure udev systems
+o  copy the .el files in a directory where Emacs can see them
+o  (optional) compile the .el files.
+
+The package is customizable, and all the customization options are
+included in the group `pilot'.
+
+On the Emacs side now, the simplest way to load the whole package is
+to insert the following into your .emacs or .xemacs/init.el file:
+
+   (require 'pilot)
+
+This will load all the functionality mentioned below.  If you use VM
+and want the Pilot menu to appear into VM then call the function
+`pilot-add-to-vm' from within .vm.  In addition you may want to set up
+a key combitation for the function `save-buffer-to-pilot'.  The
+following is my setup:
+
+o  In .vm I have inserted the lines
+
+   (require 'pilot)
+   (pilot-add-to-vm)
+
+   which in effect load the whole thing and set up the menu as soon as
+   I launch VM.
+
+o  Then in the Emacs init file (.emacs or .xemacs/init.el) I inserted
+   the lines
+
+   (autoload 'save-buffer-to-pilot "memo-pilot.el" "Save current buffer as a pilot memo" t)
+   (global-set-key [(control c) (control s)] 'save-buffer-to-pilot)
+
+   which establishes C-c C-s as key combination for
+   `save-buffer-to-pilot'.
+
+Autoloads are available for all the functions described below if
+desired.
+
+To use just one module (bbdb-pilot.el, diary-pilot.el, or
+memo-pilot.el) you need to load it by using one of the following three
+calls:
+
+   (require 'bbdb-pilot)
+   (require 'disry-pilot)
+   (require 'memo-pilot)
+
+or by providing appropriate autoloads.
+
+Technically you do not need the other two files but you do need
+pilot.el and the two shell scripts.
+
+
+Functionality
+=============
+
+The code is split into four subsystems, as follows:
+
+
+1. Common code: pilot.el 
+------------------------
+
+This file contains code that is used by all the other parts of the
+package, plus initialization code.  From a user perspective the
+function `pilot-make-menu' inserts a new menu `Pilot' into the current
+menu bar.  The menu contains entries for almost all the functionality
+of the package as follows:
+
+   Message to memo: runs `vm-message-to-pilot' (from memo-pilot.el)
+   Get memos:       runs `pilot-get-memos' (from memo-pilot.el)
+   Diary Sync:      runs `diary-pilot-to-pilot' (from diary-pilot.el)
+   BBDB to pilot:   runs `bbdb-pilot-to-pilot' (from bbdb-pilot.el)
+   Pilot to BBDB:   runs `bbdb-pilot-to-bbdb' (from bbdb-pilot.el)
+
+All these menu items (or more precisely the functions they call) shall
+be described later within their own sections.
+
+The function `pilot-add-to-vm' adds the aforementioned menu to the
+relevant VM buffers.
+
+One function not included in the menu (but part of the main user
+interface) is `save-buffer-to-pilot' (from memo-pilot.el).
+
+The following general customization options are provided:
+
+`pilot-wait-command' is the name of a program that waits for
+   /dev/pilot to appear and then launch the command line arguments as
+   a command.  Every pilot-link command will be called prefixed by
+   this string.  If you do not need anyhting like this then set the
+   variable to the empty string.
+
+`pilot-end-command' is the name of the program that waits for
+   /dev/pilot to disappear and then ends.  This command is run after
+   every pilot-link command.  If you do not need it, then set it to
+   the empty string.  In particular if your pilot device persists
+   after the hot sync operation is completed you *must* set this to
+   the empty string (otherwise your Emacs will hang).
+
+`pilot-device' is the device name for the pilot and defaults to
+   `/dev/pilot'.
+
+
+2.  BBDB code: bbdb-pilot.el
+----------------------------
+
+The main functions that are provided by this package are the
+following:
+
+`bbdb-pilot-to-pilot' pushes the BBDB records to the pilot into the
+   BBDB category.  The said category is erased first, so information
+   present in this category but not in the BBDB database is lost.  If
+   this is not desired then `bbdb-pilot-to-bbdb' (below) must be run
+   first.
+
+   Relevant customization options: `bbdb-pilot-to-pilot-file' is the
+   name of the temporary filed used for the transfer.
+
+`bbdb-pilot-to-bbdb' gets the contacts (all categories) from the pilot
+   and
+   (a)  inserts new contacts into the BBDB database
+   (b)  augments the existing contacts with the new information found
+        on the pilot side
+
+   Two contacts are different if they hae different name or surname.
+   The existing contacts are augmented with the pilot-side entries
+   that are not already in the BBDB database.  The labels for these
+   new entries (if applicable) are gottent from the pilot whenever
+   `bbdb-pilot-trust-pilot-labels' is non-NIL, and are all "Pilot"
+   otherwise.
+
+   Relevant customization options: `bbdb-pilot-trust-pilot-labels'
+   should be set to non-NIL if pilot-link transfers correctly the
+   labels of the labelled fields.  If this variable is NIL (default,
+   since my pilot-link does not appear to get any label right) then
+   all the pilot labels get replaced by the generic value "Pilot".
+   `bbdb-pilot-from-pilot-file' is the name of the temporary filed
+   used for the transfer.
+
+
+3. Diary code: diary-pilot.el
+-----------------------------
+
+`diary-pilot-to-pilot' pushes all the diary entries for the next n days
+   (default 356) to the pilot, and get the new pilot entries into the
+   diary.  Handles well most types of pilot-side appointments
+   (including cyclic ones).
+
+   Pilot entries are compared using their text, their start time, and
+   their end time.  If these are all equal then the entries are
+   considered identical (irrespective of their date).
+
+   Relevant customization: `diary-pilot-ignore-entries' contains a
+   list of strings; each string from this list causes a diary entry
+   that contains it not to be transferred to the pilot.  The number of
+   days worth of appointments that are transferred to the pilot is
+   given by `diary-pilot-numdays'.  The alarm time for each
+   appointment transferred to the pilot is given by
+   `diary-pilot-alarm-time'. `diary-pilot-to-pilot-file',
+   `diary-pilot-from-pilot-file' give the name of temporary files used
+   for the transfer back and forth between the diary and the pilot.
+   `diary-pilot-database' should always contain the name of the
+   appointments database (and its default value should be OK).
+
+   If `diary-pilot-ignore-notes' is non-NIL (default) then the pilot
+   notes are ignored when the corresponding entry is inserted into the
+   diary; otherwise the notes are insetred into the diary following
+   the message and separated by the message by "--".
+
+4. Memo code: memo-pilot.el
+---------------------------
+
+`vm-message-to-pilot' writes the currently displayed VM messsage as a
+   memo to the pilot.
+
+   If the subject of the messsage has the form [<text1>] <text2> then
+   the name of the memo is set to <text2> and the memo will be filed
+   into the category <text1>; otherwise the whole subject will be the
+   name of the memo and the memo will be filed into the default
+   category.
+   
+   Relevant customization: `memo-pilot-category' gives the name of the
+   default category.  `memo-pilot-temp-file' is the name of the
+   temporary file used for the transfer.
+
+`pilot-get-memos' Gets all the memos from the pilot and puts them in
+   the mailbox designated by `memo-pilot-mailbox'.
+
+   There is no check for duplicates, all the memos from the pilot will
+   be appended to the given mailbox.
+
+   Relevant customization: `memo-pilot-mailbox'.
+
+`save-buffer-to-pilot' saves the current buffer as a memo to the pilot
+   prompting for the title (defaults to the buffer name) and for the
+   category (defaults to `memo-pilot-category').
+
+   Relevant customization: `memo-pilot-category',
+   `memo-pilot-temp-file'.
+
+
+Known Bugs and Limitations
+==========================
+
+I am sure that bugs lurk out there, so please let me know about them
+as soon as you find them.  The following are the ones I am aware of
+(and I am working on):
+
+o  I have a report that when one exports the BBDB database to the
+   pilot for the first time (i.e., if the the BBDB category does not
+   exist on the pilot side) then all the pilot contacts get deleted
+   (but that this does not happen if the BBDB category is there, even
+   if empty).  I am not sure how to handle this, it appears to be a
+   pilot-link bug (but feel free to disagree; I would love any
+   suggestion on the matter).
+
+o  Importing the secondary addresses into the BBDB database involves a
+   lot of guesswork. If those addresses are introduced in the same
+   format as the one used by the exporting function of this package
+   then the import is rather reliable but otherwise you should expect
+   weird results.  I am not aware of any good workaround on the
+   matter.
+
+o  `diary-pilot-to-pilot' does not handle European dates at this time.
+
+o  Testing environment is XEmacs under Linux.  I am not sure how this
+   package works under Emacs (though it should work well) and/or under
+   other operating systems (in particular under Windows).  Additionally 
+   my Palm OS device is a Treo 600 and I have no means to test other
+   such devices.

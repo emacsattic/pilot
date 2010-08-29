@@ -1,0 +1,7 @@
+#!/bin/sh
+
+echo -n "Waiting for the pilot... " 1>&2
+until [ -e /dev/pilot ]; do sleep 1; echo -n "." 1>&2; done
+echo " ready!" 1>&2
+exec $@
+
